@@ -25,8 +25,7 @@ extern WiFiClient espClient;
 extern PubSubClient client;
 
 void publish_message(String message);
-void mqtt_handler(void* pvParameters);
+void mqtt_handler(void *pvParameters);
 void mqtt_reconnect();
-void on_message_received(char* topic, byte* payload, unsigned int length);
-
+void on_message_received(char *topic, byte *payload, unsigned int length);
 #endif
