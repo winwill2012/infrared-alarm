@@ -13,6 +13,8 @@
 const String TELECONTROL_ON[2] = {"LC:BD8D347E", "LC:ADF49435"};
 const String TELECONTROL_OFF[2] = {"LC:BD8D327C", "LC:ADF49233"};
 WiFiManager manager;
+TimerHandle_t check_wifi_timer;
+IPAddress null_address(0, 0, 0, 0);
 // 查询指令类型，0：关闭，1：打开，2：传感器信号
 int get_cmd_type(String cmd)
 {
@@ -33,35 +35,28 @@ int get_cmd_type(String cmd)
     return 2;
 }
 
-void connect_wifi()
+void onWiFiEvent(WiFiEvent_t event)
 {
-    manager.setWiFiAutoReconnect(false);
-    manager.setConnectTimeout(30);
-    if (manager.autoConnect("安防报警器"))
+    switch (event)
     {
-        Serial.println("WiFi connected");
-        Serial.println("IP address: ");
-        Serial.println(WiFi.localIP());
-    }
-    else
-    {
-        Serial.println("Connect wifi failed...");
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+        Serial.printf("WiFi connected, IP address: %s\n", WiFi.localIP());
+        xTimerStop(check_wifi_timer, 0);
+        break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        Serial.println("WiFi lost connection");
+        xTimerStart(check_wifi_timer, 0);
+        break;
+    default:
+        break;
     }
 }
 
-void reconnect_wifi()
+void init_wifi()
 {
-    Serial.println("reconnect wifi...");
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(manager.getWiFiSSID(), manager.getWiFiPass());
-    if (WiFi.isConnected())
-    {
-        Serial.println("reconnect wifi success");
-    }
-    else
-    {
-        Serial.println("reconnect wifi failed");
-    }
+    WiFi.useStaticBuffers(true);
+    manager.autoConnect("安防报警器");
+    WiFi.onEvent(onWiFiEvent);
 }
 
 void uart_handler(void *pvParameters)
@@ -99,69 +94,36 @@ void uart_handler(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void wifi_check(void *ptr)
+void check_wifi(TimerHandle_t timer)
 {
-    while (1)
-    {
-        if (!WiFi.isConnected())
-        {
-            Serial.println("Wifi disconnected, reconnecting...");
-            connect_wifi();
-        }
-        vTaskDelay(1);
-    }
-}
-
-void print_info(TimerHandle_t timer)
-{
-
     Serial.println("-------------------------------");
     Serial.print("Running time: ");
     Serial.print(millis() / 1000);
     Serial.println("s");
-    Serial.print("Ram size: ");
-    Serial.println(ESP.getHeapSize());
-    Serial.print("Free ram: ");
-    Serial.println(ESP.getFreeHeap());
-    Serial.print("Psram size: ");
-    Serial.println(ESP.getPsramSize());
-    Serial.print("Psram free: ");
-    Serial.println(ESP.getFreePsram());
     Serial.print("Wifi connected: ");
     Serial.println(WiFi.isConnected());
     Serial.print("Wifi ipaddress: ");
     Serial.println(WiFi.localIP());
-    Serial.print("DNS IP1: ");
-    Serial.println(WiFi.dnsIP(0));
-    Serial.print("DNS IP2: ");
-    Serial.println(WiFi.dnsIP(1));
-    Serial.print("WiFi SSID: ");
-    Serial.println(manager.getWiFiSSID());
-    Serial.print("WiFi Password: ");
-    Serial.println(manager.getWiFiPass());
     Serial.println("-------------------------------");
-    if (!WiFi.isConnected())
-    {
-        reconnect_wifi();
-    }
+    WiFi.disconnect();
+    WiFi.begin(manager.getWiFiSSID(), manager.getWiFiPass());
 }
 
 void setup()
 {
     Serial.println("setup...");
-    // WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  // 关闭断电检测
     Serial.begin(115200);
     pinMode(18, OUTPUT);
     init_alarm();
     digitalWrite(18, LOW);
     load_config();
-    connect_wifi();
+    init_wifi();
     init_time_config();
-    // xTaskCreate(wifi_check, "wifi_check", 2048, NULL, 1, NULL);
     xTaskCreatePinnedToCore(uart_handler, "uart_handler", 2048, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(mqtt_handler, "mqtt_handler", 8192, NULL, 1, NULL, 1);
-    TimerHandle_t timer = xTimerCreate("print_info", pdMS_TO_TICKS(15000), pdTRUE, NULL, print_info);
-    xTimerStart(timer, 0);
+
+    check_wifi_timer = xTimerCreate("check_wifi", pdMS_TO_TICKS(2000), pdTRUE, nullptr, check_wifi);
+
     digitalWrite(18, HIGH);
     Serial.println("setup end...");
 }
