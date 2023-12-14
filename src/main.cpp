@@ -35,28 +35,26 @@ int get_cmd_type(String cmd)
     return 2;
 }
 
-void onWiFiEvent(WiFiEvent_t event)
+void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    switch (event)
-    {
-    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        Serial.printf("WiFi connected, IP address: %s\n", WiFi.localIP());
-        xTimerStop(check_wifi_timer, 0);
-        break;
-    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        Serial.println("WiFi lost connection");
-        xTimerStart(check_wifi_timer, 0);
-        break;
-    default:
-        break;
-    }
+    Serial.println("WiFi connected");
+    xTimerStop(check_wifi_timer, 0);
 }
 
-void init_wifi()
+void onWiFiDisConnected(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    Serial.println("WiFi disconnected");
+    xTimerStart(check_wifi_timer, 0);
+}
+
+void setup_wifi()
 {
     WiFi.useStaticBuffers(true);
     manager.autoConnect("安防报警器");
-    WiFi.onEvent(onWiFiEvent);
+    Serial.print("WiFi connected, ip address: ");
+    Serial.println(WiFi.localIP().toString().c_str());
+    WiFi.onEvent(onWiFiDisConnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+    WiFi.onEvent(onWiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
 }
 
 void uart_handler(void *pvParameters)
@@ -117,7 +115,7 @@ void setup()
     init_alarm();
     digitalWrite(18, LOW);
     load_config();
-    init_wifi();
+    setup_wifi();
     init_time_config();
     xTaskCreatePinnedToCore(uart_handler, "uart_handler", 2048, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(mqtt_handler, "mqtt_handler", 8192, NULL, 1, NULL, 1);
