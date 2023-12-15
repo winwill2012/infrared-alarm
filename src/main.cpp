@@ -37,13 +37,16 @@ int get_cmd_type(String cmd)
 
 void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    Serial.println("WiFi connected");
+    Serial.print(millis());
+    Serial.print(" - WiFi connected: ");
+    Serial.println(WiFi.localIP());
     xTimerStop(check_wifi_timer, 0);
 }
 
 void onWiFiDisConnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    Serial.println("WiFi disconnected");
+    Serial.print(millis());
+    Serial.println(" - WiFi disconnected");
     xTimerStart(check_wifi_timer, 0);
 }
 
@@ -103,7 +106,6 @@ void check_wifi(TimerHandle_t timer)
     Serial.print("Wifi ipaddress: ");
     Serial.println(WiFi.localIP());
     Serial.println("-------------------------------");
-    WiFi.disconnect();
     WiFi.begin(manager.getWiFiSSID(), manager.getWiFiPass());
 }
 
